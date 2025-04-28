@@ -77,7 +77,18 @@ class ContentFilter {
     }
   }
   
-  checkContent(subject: string, textContent: string, htmlContent: string, userId?: number): FilterResult {
+  async checkContent(subject: string, textContent: string, htmlContent: string, userId?: number, senderEmail?: string, childAccountId?: number): Promise<FilterResult> {
+    // Skip filtering if the sender is trusted
+    if (userId !== undefined && senderEmail) {
+      const isTrusted = await storage.isEmailTrusted(senderEmail, userId, childAccountId);
+      if (isTrusted) {
+        return {
+          isInappropriate: false,
+          reason: 'Sender is trusted'
+        };
+      }
+    }
+    
     // Combine and normalize text for checking
     const allText = `${subject} ${textContent}`.toLowerCase();
     

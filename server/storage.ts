@@ -513,6 +513,58 @@ export class MemStorage implements IStorage {
     this.filterRules.set(filterRule2.id, filterRule2);
     this.filterRuleIdCounter = 3;
     
+    // Create some trusted senders
+    const trustedSender1: TrustedSender = {
+      id: 1,
+      user_id: 1,
+      child_account_id: null, // Applies to all children
+      email_address: 'school@example.edu',
+      description: 'School email',
+      created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) // 6 days ago
+    };
+    
+    const trustedSender2: TrustedSender = {
+      id: 2,
+      user_id: 1,
+      child_account_id: 1, // Only for first child
+      email_address: 'coach@sportsteam.com',
+      description: 'Soccer coach',
+      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
+    };
+    
+    this.trustedSenders.set(trustedSender1.id, trustedSender1);
+    this.trustedSenders.set(trustedSender2.id, trustedSender2);
+    this.trustedSenderIdCounter = 3;
+    
+    // Create junk mail preferences
+    const junkPrefs1: JunkMailPreferences = {
+      id: 1,
+      user_id: 1,
+      child_account_id: null, // Default for all accounts
+      keep_newsletters: true,
+      keep_receipts: true,
+      keep_social_media: false,
+      auto_delete_all: true,
+      created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
+      updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) // 2 days ago
+    };
+    
+    const junkPrefs2: JunkMailPreferences = {
+      id: 2,
+      user_id: 1,
+      child_account_id: 2, // Custom for second child
+      keep_newsletters: false,
+      keep_receipts: true,
+      keep_social_media: true,
+      auto_delete_all: true,
+      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
+      updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
+    };
+    
+    this.junkMailPreferences.set(junkPrefs1.id, junkPrefs1);
+    this.junkMailPreferences.set(junkPrefs2.id, junkPrefs2);
+    this.junkMailPreferencesIdCounter = 3;
+    
     // Create some activity logs
     const logs: ActivityLog[] = [
       {
@@ -586,6 +638,60 @@ export class MemStorage implements IStorage {
         details: 'Checking for new junk emails',
         sender_email: null,
         created_at: new Date(Date.now() - 30 * 60 * 1000) // 30 minutes ago
+      },
+      {
+        id: 9,
+        user_id: 1,
+        child_account_id: 1,
+        activity_type: 'trusted_sender_added',
+        details: 'Added trusted sender: school@example.edu (School email)',
+        sender_email: 'school@example.edu',
+        created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) // 6 days ago
+      },
+      {
+        id: 10,
+        user_id: 1,
+        child_account_id: 1,
+        activity_type: 'trusted_sender_added',
+        details: 'Added trusted sender: coach@sportsteam.com (Soccer coach)',
+        sender_email: 'coach@sportsteam.com',
+        created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
+      },
+      {
+        id: 11,
+        user_id: 1,
+        child_account_id: null,
+        activity_type: 'junk_preferences_created',
+        details: 'Created junk mail preferences',
+        sender_email: null,
+        created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 days ago
+      },
+      {
+        id: 12,
+        user_id: 1,
+        child_account_id: 2,
+        activity_type: 'junk_preferences_created',
+        details: 'Created junk mail preferences',
+        sender_email: null,
+        created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
+      },
+      {
+        id: 13,
+        user_id: 1,
+        child_account_id: 1,
+        activity_type: 'kept',
+        details: 'Kept junk email (newsletter): Weekly School Newsletter',
+        sender_email: 'newsletter@school.edu',
+        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) // 2 days ago
+      },
+      {
+        id: 14,
+        user_id: 1,
+        child_account_id: 2,
+        activity_type: 'kept',
+        details: 'Kept junk email (social media): Your Instagram notifications',
+        sender_email: 'notifications@instagram.com',
+        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) // 1 day ago
       }
     ];
     

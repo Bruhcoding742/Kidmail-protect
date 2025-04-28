@@ -58,6 +58,9 @@ class EmailService {
     console.log(`Checking emails for ${account.email}`);
     
     try {
+      // Get junk mail preferences for this account
+      const junkPreferences = await this.storageService.getJunkMailPreferences(account.user_id, account.id);
+      
       // Update last check time
       await this.storageService.updateChildAccount(account.id, {
         last_check: new Date()
@@ -111,7 +114,7 @@ class EmailService {
             
             console.log(`Found ${results.length} new junk messages`);
             
-            // Messages to be deleted (all filtered emails will be deleted)
+            // Messages to be deleted
             const messagesToDelete: number[] = [];
             let messagesProcessed = 0;
             
@@ -128,13 +131,91 @@ class EmailService {
                 try {
                   // Parse the email
                   const parsed = await simpleParser(stream);
+                  const fromAddress = parsed.from?.text || 'Unknown Sender';
+                  const subject = parsed.subject || 'No Subject';
+                  const textContent = parsed.text || '';
+                  const htmlContent = parsed.html || '';
+                  
+                  // Check if the sender is trusted
+                  const isTrusted = await this.storageService!.isEmailTrusted(
+                    fromAddress, 
+                    account.user_id, 
+                    account.id
+                  );
+                  
+                  if (isTrusted) {
+                    // Skip processing for trusted senders
+                    await this.logActivity({
+                      user_id: account.user_id,
+                      child_account_id: account.id,
+                      activity_type: 'trusted_sender',
+                      details: `Kept email from trusted sender: ${fromAddress}`,
+                      sender_email: fromAddress
+                    });
+                    
+                    messagesProcessed++;
+                    return;
+                  }
+                  
+                  // Check if the email should be kept based on junk mail preferences
+                  let shouldKeep = false;
+                  let keepReason = '';
+                  
+                  if (junkPreferences) {
+                    // Check if it's a newsletter and we want to keep newsletters
+                    if (junkPreferences.keep_newsletters && 
+                        (subject.toLowerCase().includes('newsletter') || 
+                         textContent.toLowerCase().includes('newsletter') || 
+                         textContent.toLowerCase().includes('subscribe') || 
+                         textContent.toLowerCase().includes('unsubscribe'))) {
+                      shouldKeep = true;
+                      keepReason = 'newsletter';
+                    }
+                    
+                    // Check if it's a receipt/order confirmation and we want to keep those
+                    if (junkPreferences.keep_receipts && 
+                        (subject.toLowerCase().includes('receipt') ||
+                         subject.toLowerCase().includes('order') ||
+                         subject.toLowerCase().includes('confirmation') ||
+                         subject.toLowerCase().includes('invoice'))) {
+                      shouldKeep = true;
+                      keepReason = 'receipt/order';
+                    }
+                    
+                    // Check if it's from social media and we want to keep those
+                    if (junkPreferences.keep_social_media && 
+                        (fromAddress.toLowerCase().includes('facebook') || 
+                         fromAddress.toLowerCase().includes('instagram') ||
+                         fromAddress.toLowerCase().includes('twitter') ||
+                         fromAddress.toLowerCase().includes('linkedin') ||
+                         fromAddress.toLowerCase().includes('tiktok'))) {
+                      shouldKeep = true;
+                      keepReason = 'social media';
+                    }
+                  }
+                  
+                  if (shouldKeep) {
+                    // Log that we're keeping this junk mail
+                    await this.logActivity({
+                      user_id: account.user_id,
+                      child_account_id: account.id,
+                      activity_type: 'kept',
+                      details: `Kept junk email (${keepReason}): ${subject}`,
+                      sender_email: fromAddress
+                    });
+                    
+                    messagesProcessed++;
+                    return;
+                  }
                   
                   // Check if the content is inappropriate
-                  const filterResult = this.contentFilterService!.checkContent(
-                    parsed.subject || '',
-                    parsed.text || '',
-                    parsed.html || '',
-                    account.user_id
+                  const filterResult = await this.contentFilterService!.checkContent(
+                    subject,
+                    textContent,
+                    htmlContent,
+                    account.user_id,
+                    fromAddress,
+                    account.id
                   );
                   
                   if (filterResult.isInappropriate) {
@@ -146,10 +227,10 @@ class EmailService {
                     // Forward the email to the parent
                     await this.forwardEmail(
                       account, 
-                      parsed.from?.text || 'Unknown Sender',
-                      parsed.subject || 'No Subject',
-                      parsed.text || '',
-                      parsed.html || '',
+                      fromAddress,
+                      subject,
+                      textContent,
+                      htmlContent,
                       filterResult.reason
                     );
                     
@@ -159,10 +240,10 @@ class EmailService {
                       child_account_id: account.id,
                       activity_type: 'filter_match',
                       details: `Inappropriate email detected: ${filterResult.reason}`,
-                      sender_email: parsed.from?.text || 'Unknown Sender'
+                      sender_email: fromAddress
                     });
-                  } else {
-                    // Since the user wants to delete all junk mail whether it's inappropriate or not
+                  } else if (junkPreferences && junkPreferences.auto_delete_all) {
+                    // Delete based on junk mail preferences
                     messagesToDelete.push(seqno);
                     
                     // Log the deletion of non-inappropriate junk
@@ -170,14 +251,14 @@ class EmailService {
                       user_id: account.user_id,
                       child_account_id: account.id,
                       activity_type: 'deleted',
-                      details: `Deleted junk email with subject: ${parsed.subject || 'No Subject'}`,
-                      sender_email: parsed.from?.text || 'Unknown Sender'
+                      details: `Deleted junk email with subject: ${subject}`,
+                      sender_email: fromAddress
                     });
                   }
                   
                   messagesProcessed++;
                   
-                  // If all messages have been processed, delete them
+                  // If all messages have been processed, delete those marked for deletion
                   if (messagesProcessed === results.length && messagesToDelete.length > 0) {
                     console.log(`Deleting ${messagesToDelete.length} messages`);
                     imap.addFlags(messagesToDelete, '\\Deleted', (err) => {
