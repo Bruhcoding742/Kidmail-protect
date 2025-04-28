@@ -90,6 +90,51 @@ export const insertActivityLogSchema = createInsertSchema(activityLogs).pick({
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 export type ActivityLog = typeof activityLogs.$inferSelect;
 
+// Trusted senders whitelist
+export const trustedSenders = pgTable("trusted_senders", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull().references(() => users.id),
+  child_account_id: integer("child_account_id").references(() => childAccounts.id),
+  email_address: text("email_address").notNull(),
+  description: text("description"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTrustedSenderSchema = createInsertSchema(trustedSenders).pick({
+  user_id: true,
+  child_account_id: true,
+  email_address: true,
+  description: true,
+});
+
+export type InsertTrustedSender = z.infer<typeof insertTrustedSenderSchema>;
+export type TrustedSender = typeof trustedSenders.$inferSelect;
+
+// Junk mail preferences
+export const junkMailPreferences = pgTable("junk_mail_preferences", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull().references(() => users.id),
+  child_account_id: integer("child_account_id").references(() => childAccounts.id),
+  keep_newsletters: boolean("keep_newsletters").default(false).notNull(),
+  keep_receipts: boolean("keep_receipts").default(false).notNull(),
+  keep_social_media: boolean("keep_social_media").default(false).notNull(),
+  auto_delete_all: boolean("auto_delete_all").default(true).notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertJunkMailPreferencesSchema = createInsertSchema(junkMailPreferences).pick({
+  user_id: true,
+  child_account_id: true,
+  keep_newsletters: true,
+  keep_receipts: true,
+  keep_social_media: true,
+  auto_delete_all: true,
+});
+
+export type InsertJunkMailPreferences = z.infer<typeof insertJunkMailPreferencesSchema>;
+export type JunkMailPreferences = typeof junkMailPreferences.$inferSelect;
+
 // System status and settings
 export const systemStatus = pgTable("system_status", {
   id: serial("id").primaryKey(),
