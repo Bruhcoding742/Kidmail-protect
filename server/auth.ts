@@ -5,8 +5,10 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { pool } from "./db";
 
 declare global {
   namespace Express {
@@ -16,6 +18,7 @@ declare global {
 
 const scryptAsync = promisify(scrypt);
 const MemoryStore = createMemoryStore(session);
+const PgSessionStore = connectPgSimple(session);
 
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -31,13 +34,22 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  // Use different session stores based on environment
+  const sessionStore = process.env.NODE_ENV === 'production' 
+    ? new PgSessionStore({
+        pool,
+        tableName: 'session',
+        createTableIfMissing: true
+      })
+    : new MemoryStore({
+        checkPeriod: 86400000 // prune expired entries every 24h
+      });
+
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "kidmail-protector-secret",
     resave: false,
     saveUninitialized: false,
-    store: new MemoryStore({
-      checkPeriod: 86400000 // prune expired entries every 24h
-    }),
+    store: sessionStore,
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       secure: process.env.NODE_ENV === "production",
