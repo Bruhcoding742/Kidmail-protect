@@ -287,7 +287,7 @@ export const EmailPreviewList: React.FC<{
                     From: {email.sender} • {email.date}
                   </CardDescription>
                 </div>
-                <div>{getSafetyIcon()}</div>
+                <div>{getSafetyIcon(email.safety)}</div>
               </div>
             </CardHeader>
           </Card>
