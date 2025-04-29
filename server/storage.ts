@@ -5,7 +5,9 @@ import {
   activityLogs, type ActivityLog, type InsertActivityLog,
   systemStatus, type SystemStatus, type InsertSystemStatus,
   trustedSenders, type TrustedSender, type InsertTrustedSender,
-  junkMailPreferences, type JunkMailPreferences, type InsertJunkMailPreferences
+  junkMailPreferences, type JunkMailPreferences, type InsertJunkMailPreferences,
+  emailProviders, type EmailProvider, type InsertEmailProvider,
+  emailProviderEnum
 } from "@shared/schema";
 
 export interface IStorage {
@@ -48,6 +50,14 @@ export interface IStorage {
   // System status methods
   getSystemStatus(): Promise<SystemStatus>;
   updateSystemStatus(data: InsertSystemStatus): Promise<SystemStatus>;
+  
+  // Email provider methods
+  getEmailProvider(id: number): Promise<EmailProvider | undefined>;
+  getEmailProviderByType(providerType: string): Promise<EmailProvider | undefined>;
+  getAllEmailProviders(): Promise<EmailProvider[]>;
+  createEmailProvider(provider: InsertEmailProvider): Promise<EmailProvider>;
+  updateEmailProvider(id: number, data: Partial<InsertEmailProvider>): Promise<EmailProvider>;
+  deleteEmailProvider(id: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -58,6 +68,7 @@ export class MemStorage implements IStorage {
   private trustedSenders: Map<number, TrustedSender>;
   private junkMailPreferences: Map<number, JunkMailPreferences>;
   private systemStatusData: SystemStatus | undefined;
+  private emailProviderData: Map<number, EmailProvider>;
   
   private userIdCounter: number;
   private childAccountIdCounter: number;
@@ -65,6 +76,7 @@ export class MemStorage implements IStorage {
   private activityLogIdCounter: number;
   private trustedSenderIdCounter: number;
   private junkMailPreferencesIdCounter: number;
+  private emailProviderIdCounter: number;
   
   constructor() {
     this.users = new Map();
@@ -73,6 +85,7 @@ export class MemStorage implements IStorage {
     this.activityLogs = new Map();
     this.trustedSenders = new Map();
     this.junkMailPreferences = new Map();
+    this.emailProviderData = new Map();
     
     this.userIdCounter = 1;
     this.childAccountIdCounter = 1;
@@ -80,6 +93,7 @@ export class MemStorage implements IStorage {
     this.activityLogIdCounter = 1;
     this.trustedSenderIdCounter = 1;
     this.junkMailPreferencesIdCounter = 1;
+    this.emailProviderIdCounter = 1;
     
     // Initialize with a default system status
     this.systemStatusData = {
