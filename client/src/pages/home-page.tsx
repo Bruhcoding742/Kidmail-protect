@@ -28,21 +28,21 @@ export default function HomePage() {
   // Fetch child accounts
   const { data: childAccounts } = useQuery<ChildAccount[]>({
     queryKey: ["/api/child-accounts", { userId: user?.id }],
-    queryFn: getQueryFn(),
+    queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!user,
   });
   
   // Fetch activity logs
   const { data: activityLogs } = useQuery<ActivityLog[]>({
     queryKey: ["/api/activity-logs", { userId: user?.id }],
-    queryFn: getQueryFn(),
+    queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!user,
   });
   
   // Fetch system status
   const { data: systemStatus } = useQuery<SystemStatus>({
     queryKey: ["/api/system-status"],
-    queryFn: getQueryFn(),
+    queryFn: getQueryFn({ on401: "returnNull" }),
   });
   
   // Handle logout
@@ -150,9 +150,9 @@ export default function HomePage() {
                   ? "All systems operational" 
                   : "Some services degraded"}
               </div>
-              {systemStatus?.last_update && (
+              {systemStatus?.last_updated && (
                 <div className="mt-1 text-xs text-muted-foreground">
-                  Last updated: {new Date(systemStatus.last_update).toLocaleDateString()}
+                  Last updated: {new Date(systemStatus.last_updated).toLocaleDateString()}
                 </div>
               )}
             </div>
@@ -269,7 +269,7 @@ export default function HomePage() {
                                 {log.details}
                               </div>
                               <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                <span>{new Date(log.timestamp).toLocaleString()}</span>
+                                <span>{new Date(log.created_at).toLocaleString()}</span>
                                 {log.child_account_id && childAccounts && (
                                   <>
                                     <span>•</span>
