@@ -38,7 +38,7 @@ class EmailService {
     // Set new interval
     const intervalMinutes = account.check_interval || 15;
     const interval = setInterval(() => {
-      this.checkAndForward(account).catch(err => {
+      this.checkAndProcess(account).catch(err => {
         console.error(`Error checking account ${account.id}:`, err);
         this.logActivity({
           user_id: account.user_id,
@@ -53,7 +53,7 @@ class EmailService {
     console.log(`Scheduled check for account ${account.id} every ${intervalMinutes} minutes`);
   }
   
-  async checkAndForward(account: ChildAccount) {
+  async checkAndProcess(account: ChildAccount) {
     if (!this.storageService || !this.contentFilterService) {
       throw new Error('Email service not initialized');
     }
@@ -215,24 +215,12 @@ class EmailService {
             // Mark for deletion
             messagesToDelete.push(message.id);
             
-            // Forward the email to the parent
-            await this.forwardEmail(
-              account, 
-              providerSettings,
-              provider,
-              fromAddress,
-              subject,
-              textContent,
-              htmlContent,
-              filterResult.reason
-            );
-            
-            // Log the forwarded email
+            // Log the inappropriate content detection and deletion
             await this.logActivity({
               user_id: account.user_id,
               child_account_id: account.id,
-              activity_type: 'filter_match',
-              details: `Inappropriate email detected: ${filterResult.reason}`,
+              activity_type: 'inappropriate_deleted',
+              details: `Deleted inappropriate email: ${filterResult.reason}`,
               sender_email: fromAddress
             });
           } else if (junkPreferences && junkPreferences.auto_delete_all) {
@@ -285,79 +273,7 @@ class EmailService {
     }
   }
   
-  async forwardEmail(
-    account: ChildAccount,
-    providerSettings: EmailProvider,
-    provider: EmailProviderInterface,
-    fromAddress: string,
-    subject: string,
-    text: string,
-    html: string,
-    filterReason: string
-  ) {
-    try {
-      // Prepare sanitized content
-      const sanitizedText = `
-        [FORWARDED BY KIDMAIL PROTECTOR]
-        
-        This email was sent to ${account.email} and filtered for inappropriate content.
-        
-        Filter match reason: ${filterReason}
-        
-        Original sender: ${fromAddress}
-        
-        --- ORIGINAL MESSAGE ---
-        
-        ${text}
-      `;
-      
-      const sanitizedHtml = `
-        <div style="background-color:#f8f9fa;padding:20px;margin-bottom:20px;border-radius:5px;">
-          <h3 style="color:#1976d2;margin-top:0;">FORWARDED BY KIDMAIL PROTECTOR</h3>
-          <p>This email was sent to <strong>${account.email}</strong> and filtered for inappropriate content.</p>
-          <p><strong>Filter match reason:</strong> ${filterReason}</p>
-          <p><strong>Original sender:</strong> ${fromAddress}</p>
-        </div>
-        <div style="border-left:4px solid #ddd;padding-left:15px;">
-          ${html}
-        </div>
-      `;
-      
-      // Send the email using the provider
-      const sent = await provider.sendMail({
-        from: `"KidMail Protector" <${account.email}>`,
-        to: account.forwarding_email,
-        subject: `[KIDMAIL ALERT] ${subject}`,
-        text: sanitizedText,
-        html: sanitizedHtml
-      });
-      
-      if (!sent) {
-        console.error(`Failed to send email: ${provider.getLastError?.()?.message || 'Unknown error'}`);
-        throw new Error('Failed to send forwarded email');
-      }
-      
-      console.log(`Email forwarded to ${account.forwarding_email}`);
-      
-      // Update last forward time
-      await this.storageService!.updateChildAccount(account.id, {
-        last_forward: new Date()
-      } as any); // Using 'as any' temporarily to bypass TS error
-      
-      // Log the forward
-      await this.logActivity({
-        user_id: account.user_id,
-        child_account_id: account.id,
-        activity_type: 'forward',
-        details: `Email forwarded to ${account.forwarding_email}`,
-        sender_email: fromAddress
-      });
-      
-    } catch (error) {
-      console.error('Error forwarding email:', error);
-      throw error;
-    }
-  }
+  // The forwardEmail method has been removed as we now delete inappropriate emails instead of forwarding them
   
   async logActivity(logData: InsertActivityLog) {
     if (!this.storageService) {

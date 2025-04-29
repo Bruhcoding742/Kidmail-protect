@@ -185,7 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Start the check process asynchronously
-      emailService.checkAndForward(account)
+      emailService.checkAndProcess(account)
         .catch(err => console.error(`Error checking account ${childAccountId}:`, err));
       
       res.json({ message: "Check initiated", childAccountId });
