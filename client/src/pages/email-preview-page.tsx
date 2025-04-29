@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Filter, RefreshCw, Shield, Mail } from "lucide-react";
+import { Filter, RefreshCw, Shield, Mail, Inbox } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
+import { Link } from "wouter";
 
 // Match the ContentSafety enum from our component
 type ApiSafety = 'safe' | 'warning' | 'unsafe' | 'unknown';
@@ -198,6 +199,18 @@ const EmailPreviewPage = () => {
     }
   });
 
+  // Convert API emails to the format expected by EmailPreviewList
+  const mappedEmails = (emails || []).map(email => ({
+    ...email,
+    safety: mapApiSafetyToEnum(email.safety)
+  }));
+
+  // Create an adapted version of the selected email for the preview modal
+  const adaptedSelectedEmail = selectedEmail ? {
+    ...selectedEmail,
+    safety: mapApiSafetyToEnum(selectedEmail.safety)
+  } : null;
+
   if (isLoadingAccounts) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -209,7 +222,14 @@ const EmailPreviewPage = () => {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Email Preview & Content Safety</h1>
+        <div className="flex items-center gap-4">
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="gap-2">
+              <Inbox className="h-4 w-4" /> Back to Dashboard
+            </Button>
+          </Link>
+          <h1 className="text-3xl font-bold">Email Preview & Content Safety</h1>
+        </div>
         {selectedChildId && (
           <Button
             size="sm"
@@ -281,7 +301,7 @@ const EmailPreviewPage = () => {
                   </div>
                 ) : (
                   <EmailPreviewList 
-                    emails={emails || []} 
+                    emails={mappedEmails} 
                     onSelectEmail={(index) => handleSelectEmail(emails![index])} 
                   />
                 )}
@@ -364,10 +384,14 @@ const EmailPreviewPage = () => {
           // Don't clear selectedEmailId immediately to prevent UI flicker
           setTimeout(() => setSelectedEmailId(null), 300);
         }}
-        email={selectedEmail || null}
-        onDelete={selectedEmailId ? () => deleteEmailMutation.mutate(selectedEmailId) : undefined}
+        email={adaptedSelectedEmail}
+        onDelete={selectedEmailId ? async () => {
+          await deleteEmailMutation.mutateAsync(selectedEmailId);
+        } : undefined}
         onMarkSafe={selectedEmailId && selectedEmail?.safety !== 'safe' 
-          ? () => markAsSafeMutation.mutate(selectedEmailId) 
+          ? async () => {
+            await markAsSafeMutation.mutateAsync(selectedEmailId);
+          } 
           : undefined
         }
         isDeleting={deleteEmailMutation.isPending}

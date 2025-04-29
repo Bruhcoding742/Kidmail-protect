@@ -118,6 +118,15 @@ export default function HomePage() {
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </Button>
+              <Link href="/email-preview">
+                <Button 
+                  variant="ghost"
+                  className="justify-start w-full" 
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Email Preview
+                </Button>
+              </Link>
             </nav>
             
             {/* System status */}
