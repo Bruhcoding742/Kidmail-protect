@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { getQueryFn } from "@/lib/queryClient";
-import { Activity, Inbox, Settings, Shield, Users, Bell, RefreshCw } from "lucide-react";
+import { Activity, Inbox, Mail, Settings, Shield, Users, Bell, RefreshCw } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -123,8 +123,17 @@ export default function HomePage() {
                   variant="ghost"
                   className="justify-start w-full" 
                 >
-                  <Shield className="mr-2 h-4 w-4" />
+                  <Mail className="mr-2 h-4 w-4" />
                   Email Preview
+                </Button>
+              </Link>
+              <Link href="/risk-dashboard">
+                <Button 
+                  variant="ghost"
+                  className="justify-start w-full" 
+                >
+                  <Activity className="mr-2 h-4 w-4" />
+                  Risk Dashboard
                 </Button>
               </Link>
             </nav>
