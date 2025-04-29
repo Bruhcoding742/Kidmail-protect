@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
@@ -10,20 +10,21 @@ import {
 } from "@shared/schema";
 import { emailService } from "./email-service";
 import { contentFilter } from "./content-filter";
+import { setupAuth } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // API routes
+  // Set up authentication
+  setupAuth(app);
   
-  // User routes
-  app.post("/api/users", async (req, res) => {
-    try {
-      const data = insertUserSchema.parse(req.body);
-      const user = await storage.createUser(data);
-      res.status(201).json(user);
-    } catch (error) {
-      res.status(400).json({ message: "Invalid user data" });
+  // Middleware to check if user is authenticated
+  const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+    if (req.isAuthenticated()) {
+      return next();
     }
-  });
+    res.status(401).json({ message: "Unauthorized" });
+  };
+  
+  // API routes
 
   app.get("/api/users/:id", async (req, res) => {
     const id = parseInt(req.params.id);
