@@ -237,35 +237,41 @@ export default function RiskDashboard() {
     enabled: !!user,
   });
   
+  // Dummy data for system stats
+  const getDummySystemStats = (): SystemStats => ({
+    totalScannedEmails: 187,
+    totalBlockedThreats: 23,
+    averageRiskScore: 38,
+    systemRiskLevel: "medium" as "medium", // Type assertion to ensure it matches the enum
+    totalChildAccounts: childAccounts?.length || 0,
+    childrenAtRisk: 1,
+    threatDistribution: [
+      { type: "Inappropriate Content", count: 12 },
+      { type: "Phishing", count: 5 },
+      { type: "Spam", count: 4 },
+      { type: "Malware", count: 2 }
+    ],
+    riskTrend: Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      return {
+        date: date.toISOString(),
+        riskScore: Math.floor(Math.random() * 40) + 20,
+      };
+    })
+  });
+
   // Get system safety stats
   const { data: systemStats, isLoading: isLoadingSystemStats } = useQuery<SystemStats>({
     queryKey: ["/api/safety-stats/system", { timeframe: selectedTimeframe }],
     queryFn: async () => {
-      const res = await apiRequest('GET', `/api/safety-stats/system?timeframe=${selectedTimeframe}`);
-      
-      // Until the backend is implemented, we'll return mock data
-      return {
-        totalScannedEmails: 187,
-        totalBlockedThreats: 23,
-        averageRiskScore: 38,
-        systemRiskLevel: "medium",
-        totalChildAccounts: childAccounts?.length || 0,
-        childrenAtRisk: 1,
-        threatDistribution: [
-          { type: "Inappropriate Content", count: 12 },
-          { type: "Phishing", count: 5 },
-          { type: "Spam", count: 4 },
-          { type: "Malware", count: 2 }
-        ],
-        riskTrend: Array.from({ length: 7 }, (_, i) => {
-          const date = new Date();
-          date.setDate(date.getDate() - (6 - i));
-          return {
-            date: date.toISOString(),
-            riskScore: Math.floor(Math.random() * 40) + 20,
-          };
-        })
-      } as SystemStats;
+      try {
+        const res = await apiRequest('GET', `/api/safety-stats/system?timeframe=${selectedTimeframe}`);
+        return await res.json();
+      } catch (error) {
+        // Until the backend is fully implemented, return dummy data
+        return getDummySystemStats();
+      }
     },
     enabled: !!user,
   });

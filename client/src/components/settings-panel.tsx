@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,7 +41,7 @@ export default function SettingsPanel({ userId, childAccounts }: SettingsPanelPr
   // Fetch junk mail preferences
   const { data: junkPreferences, isLoading } = useQuery<JunkMailPreferences>({
     queryKey: ["/api/junk-mail-preferences", { userId, childAccountId: selectedAccountId }],
-    queryFn: getQueryFn(),
+    queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!userId,
   });
   
@@ -51,15 +51,15 @@ export default function SettingsPanel({ userId, childAccounts }: SettingsPanelPr
     defaultValues: {
       user_id: userId || 0,
       child_account_id: selectedAccountId,
-      keep_newsletters: junkPreferences?.keep_newsletters || false,
-      keep_receipts: junkPreferences?.keep_receipts || false,
-      keep_social_media: junkPreferences?.keep_social_media || false,
-      auto_delete_all: junkPreferences?.auto_delete_all || false,
+      keep_newsletters: false,
+      keep_receipts: false,
+      keep_social_media: false,
+      auto_delete_all: false,
     },
   });
   
   // Update form when preferences change
-  React.useEffect(() => {
+  useEffect(() => {
     if (junkPreferences) {
       junkForm.reset({
         user_id: userId || 0,
@@ -70,7 +70,7 @@ export default function SettingsPanel({ userId, childAccounts }: SettingsPanelPr
         auto_delete_all: junkPreferences.auto_delete_all,
       });
     }
-  }, [junkPreferences, userId, selectedAccountId]);
+  }, [junkPreferences, userId, selectedAccountId, junkForm]);
   
   // Save junk mail preferences mutation
   const saveJunkPrefsMutation = useMutation({
