@@ -477,27 +477,49 @@ export class MemStorage implements IStorage {
       user_id: 1,
       email: 'child1@icloud.com',
       app_password: 'app-password-1',
+      password: null,
       display_name: 'Child One',
       is_active: true,
       created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
       last_check: new Date(Date.now() - 60 * 60 * 1000), // 1 hour ago
       last_forward: new Date(Date.now() - 12 * 60 * 60 * 1000), // 12 hours ago
       check_interval: 15,
-      forwarding_email: 'parent@example.com'
+      forwarding_email: 'parent@example.com',
+      provider_id: 1, // iCloud
+      auth_method: 'app_password',
+      oauth_token: null,
+      oauth_refresh_token: null,
+      oauth_token_expires: null,
+      custom_junk_folder: null,
+      custom_host: null,
+      custom_port: null,
+      notes: 'Demo account for iCloud',
+      filter_level: 'medium'
     };
     
     const childAccount2: ChildAccount = {
       id: 2,
       user_id: 1,
-      email: 'child2@icloud.com',
-      app_password: 'app-password-2',
+      email: 'child2@gmail.com',
+      app_password: null,
+      password: null,
       display_name: 'Child Two',
       is_active: true,
       created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
       last_check: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
       last_forward: null,
       check_interval: 30,
-      forwarding_email: 'parent@example.com'
+      forwarding_email: 'parent@example.com',
+      provider_id: 2, // Gmail
+      auth_method: 'oauth2',
+      oauth_token: 'fake-oauth-token',
+      oauth_refresh_token: 'fake-oauth-refresh-token',
+      oauth_token_expires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+      custom_junk_folder: null,
+      custom_host: null,
+      custom_port: null,
+      notes: 'Demo account for Gmail',
+      filter_level: 'high'
     };
     
     this.childAccounts.set(childAccount1.id, childAccount1);
@@ -595,7 +617,7 @@ export class MemStorage implements IStorage {
         user_id: 1,
         child_account_id: 2,
         activity_type: 'account_added',
-        details: 'Added new account: Child Two (child2@icloud.com)',
+        details: 'Added new account: Child Two (child2@gmail.com)',
         sender_email: null,
         created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
       },
@@ -713,6 +735,142 @@ export class MemStorage implements IStorage {
       this.activityLogs.set(log.id, log);
     });
     this.activityLogIdCounter = logs.length + 1;
+    
+    // Setup default email providers
+    const providers: EmailProvider[] = [
+      {
+        id: 1,
+        name: 'iCloud Mail',
+        provider_type: 'icloud',
+        host: 'imap.mail.me.com',
+        port: 993,
+        smtp_host: 'smtp.mail.me.com',
+        smtp_port: 587,
+        oauth_client_id: null,
+        oauth_client_secret: null,
+        oauth_redirect_uri: null,
+        oauth_auth_url: null,
+        oauth_token_url: null,
+        oauth_scope: null,
+        junk_folder_path: 'Junk',
+        created_at: new Date(),
+        updated_at: new Date()
+      },
+      {
+        id: 2,
+        name: 'Gmail',
+        provider_type: 'gmail',
+        host: 'imap.gmail.com',
+        port: 993,
+        smtp_host: 'smtp.gmail.com',
+        smtp_port: 587,
+        oauth_client_id: null,
+        oauth_client_secret: null,
+        oauth_redirect_uri: 'http://localhost:5000/api/oauth/callback',
+        oauth_auth_url: 'https://accounts.google.com/o/oauth2/auth',
+        oauth_token_url: 'https://oauth2.googleapis.com/token',
+        oauth_scope: 'https://mail.google.com/',
+        junk_folder_path: '[Gmail]/Spam',
+        created_at: new Date(),
+        updated_at: new Date()
+      },
+      {
+        id: 3,
+        name: 'Outlook',
+        provider_type: 'outlook',
+        host: 'outlook.office365.com',
+        port: 993,
+        smtp_host: 'smtp.office365.com',
+        smtp_port: 587,
+        oauth_client_id: null,
+        oauth_client_secret: null,
+        oauth_redirect_uri: 'http://localhost:5000/api/oauth/callback',
+        oauth_auth_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+        oauth_token_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+        oauth_scope: 'offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send',
+        junk_folder_path: 'Junk Email',
+        created_at: new Date(),
+        updated_at: new Date()
+      }
+    ];
+    
+    providers.forEach(provider => {
+      this.emailProviderData.set(provider.id, provider);
+    });
+    this.emailProviderIdCounter = providers.length + 1;
+  }
+  
+  // Email provider methods
+  async getEmailProvider(id: number): Promise<EmailProvider | undefined> {
+    return this.emailProviderData.get(id);
+  }
+  
+  async getEmailProviderByType(providerType: string): Promise<EmailProvider | undefined> {
+    return Array.from(this.emailProviderData.values()).find(
+      (provider) => provider.provider_type === providerType
+    );
+  }
+  
+  async getAllEmailProviders(): Promise<EmailProvider[]> {
+    return Array.from(this.emailProviderData.values());
+  }
+  
+  async createEmailProvider(provider: InsertEmailProvider): Promise<EmailProvider> {
+    const id = this.emailProviderIdCounter++;
+    const emailProvider: EmailProvider = {
+      ...provider,
+      id,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    
+    this.emailProviderData.set(id, emailProvider);
+    
+    // Log the provider creation
+    await this.createActivityLog({
+      user_id: 1, // System user
+      child_account_id: null,
+      activity_type: 'provider_created',
+      details: `Added provider: ${provider.name} (${provider.provider_type})`,
+      sender_email: null
+    });
+    
+    return emailProvider;
+  }
+  
+  async updateEmailProvider(id: number, data: Partial<InsertEmailProvider>): Promise<EmailProvider> {
+    const provider = this.emailProviderData.get(id);
+    if (!provider) {
+      throw new Error(`Email provider with ID ${id} not found`);
+    }
+    
+    const updatedProvider: EmailProvider = {
+      ...provider,
+      ...data,
+      updated_at: new Date()
+    };
+    
+    this.emailProviderData.set(id, updatedProvider);
+    
+    return updatedProvider;
+  }
+  
+  async deleteEmailProvider(id: number): Promise<void> {
+    const provider = this.emailProviderData.get(id);
+    if (!provider) {
+      throw new Error(`Email provider with ID ${id} not found`);
+    }
+    
+    this.emailProviderData.delete(id);
+    
+    // Log the provider deletion
+    await this.createActivityLog({
+      user_id: 1, // System user
+      child_account_id: null,
+      activity_type: 'provider_deleted',
+      details: `Deleted provider: ${provider.name} (${provider.provider_type})`,
+      sender_email: null
+    });
   }
 }
 
