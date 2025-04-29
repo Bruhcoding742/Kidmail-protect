@@ -33,6 +33,7 @@ export interface IStorage {
   
   // Activity log methods
   createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
+  getActivityLog(id: number): Promise<ActivityLog | undefined>;
   getActivityLogs(userId?: number, childAccountId?: number, limit?: number): Promise<ActivityLog[]>;
   
   // Trusted sender methods
@@ -251,6 +252,10 @@ export class MemStorage implements IStorage {
     return activityLog;
   }
   
+  async getActivityLog(id: number): Promise<ActivityLog | undefined> {
+    return this.activityLogs.get(id);
+  }
+
   async getActivityLogs(userId?: number, childAccountId?: number, limit = 20): Promise<ActivityLog[]> {
     const logs = Array.from(this.activityLogs.values())
       .filter(log => {

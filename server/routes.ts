@@ -12,6 +12,22 @@ import { emailService } from "./email-service";
 import { contentFilter } from "./content-filter";
 import { setupAuth } from "./auth";
 
+// Interface for email content analysis
+export interface EmailContentAnalysis {
+  id?: string;
+  subject: string;
+  sender: string;
+  date: string;
+  contentHtml: string;
+  contentText: string;
+  safety: 'safe' | 'warning' | 'unsafe' | 'unknown';
+  matchedRules?: Array<{
+    id: number;
+    rule_text: string;
+    is_regex: boolean;
+  }>;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication
   setupAuth(app);
@@ -193,6 +209,200 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       res.status(400).json({ message: "Invalid request" });
     }
+  });
+
+  // Email content analysis routes
+  app.post("/api/analyze-content", isAuthenticated, async (req, res) => {
+    const schema = z.object({
+      subject: z.string().optional().default(""),
+      sender: z.string().optional().default(""),
+      contentHtml: z.string().optional().default(""),
+      contentText: z.string().optional().default(""),
+      userId: z.number(),
+      childAccountId: z.number().optional()
+    });
+    
+    try {
+      const { subject, sender, contentHtml, contentText, userId, childAccountId } = schema.parse(req.body);
+      
+      // Get filter rules that apply to this user/child account
+      const filterRules = await storage.getFilterRules(userId, childAccountId);
+      
+      // Check content against the filter
+      const filterResult = await contentFilter.checkContent(
+        subject,
+        contentText,
+        contentHtml,
+        userId,
+        sender,
+        childAccountId
+      );
+      
+      // Determine which rules were matched
+      const matchedRules = filterRules.filter(rule => {
+        if (rule.is_regex) {
+          try {
+            const regex = new RegExp(rule.rule_text, "i");
+            return regex.test(subject) || regex.test(contentText) || regex.test(contentHtml);
+          } catch (error) {
+            console.error(`Invalid regex in rule ${rule.id}:`, error);
+            return false;
+          }
+        } else {
+          const ruleText = rule.rule_text.toLowerCase();
+          return subject.toLowerCase().includes(ruleText) || 
+                 contentText.toLowerCase().includes(ruleText) || 
+                 contentHtml.toLowerCase().includes(ruleText);
+        }
+      });
+      
+      const analysis: EmailContentAnalysis = {
+        subject,
+        sender,
+        date: new Date().toISOString(),
+        contentHtml,
+        contentText,
+        safety: filterResult.isInappropriate ? 'unsafe' : 'safe',
+        matchedRules: matchedRules.map(rule => ({
+          id: rule.id,
+          rule_text: rule.rule_text,
+          is_regex: rule.is_regex
+        }))
+      };
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analyzing content:", error);
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  // Mock email list for preview (in a real app, this would fetch from email provider)
+  app.get("/api/email-previews/:childAccountId", isAuthenticated, async (req, res) => {
+    const childAccountId = parseInt(req.params.childAccountId);
+    if (isNaN(childAccountId)) {
+      return res.status(400).json({ message: "Invalid child account ID" });
+    }
+    
+    // Get child account
+    const childAccount = await storage.getChildAccount(childAccountId);
+    if (!childAccount) {
+      return res.status(404).json({ message: "Child account not found" });
+    }
+    
+    // Get activity logs for the child account
+    const activityLogs = await storage.getActivityLogs(childAccount.user_id, childAccountId, 10);
+    
+    // Convert activity logs to email previews
+    const emailPreviews: EmailContentAnalysis[] = activityLogs
+      .filter(log => ['deleted', 'inappropriate_deleted', 'kept'].includes(log.activity_type))
+      .map(log => {
+        // Parse the details to extract subject
+        const detailsMatch = log.details?.match(/subject: (.+)$/) || 
+                             log.details?.match(/email: (.+)$/) ||
+                             [null, 'No Subject'];
+        const subject = detailsMatch ? detailsMatch[1] : 'No Subject';
+        
+        // Determine safety level based on activity type
+        let safety: 'safe' | 'warning' | 'unsafe' | 'unknown' = 'unknown';
+        if (log.activity_type === 'inappropriate_deleted') {
+          safety = 'unsafe';
+        } else if (log.activity_type === 'deleted') {
+          safety = 'warning';
+        } else if (log.activity_type === 'kept') {
+          safety = 'safe';
+        }
+        
+        return {
+          id: log.id.toString(),
+          subject,
+          sender: log.sender_email || 'Unknown Sender',
+          date: log.created_at.toISOString(),
+          contentHtml: '',  // We don't store this in logs
+          contentText: log.details || '',
+          safety
+        };
+      });
+    
+    res.json(emailPreviews);
+  });
+
+  // Mock individual email content for preview
+  app.get("/api/email-content/:id", isAuthenticated, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid ID" });
+    }
+    
+    // In a real app, we would fetch the actual email content
+    // For now, we'll just return a mock based on activity log
+    const log = await storage.getActivityLog(id);
+    if (!log) {
+      return res.status(404).json({ message: "Email not found" });
+    }
+    
+    // Get matching rules for this user/child
+    const rules = await storage.getFilterRules(log.user_id, log.child_account_id);
+    
+    // Simple mock of matched rules (in reality, we'd need to analyze the content again)
+    const matchedRules = log.activity_type === 'inappropriate_deleted' 
+      ? rules.slice(0, 2).map(rule => ({
+          id: rule.id,
+          rule_text: rule.rule_text,
+          is_regex: rule.is_regex
+        }))
+      : [];
+    
+    // Parse the details to extract subject
+    const detailsMatch = log.details?.match(/subject: (.+)$/) || 
+                         log.details?.match(/email: (.+)$/) ||
+                         [null, 'No Subject'];
+    const subject = detailsMatch ? detailsMatch[1] : 'No Subject';
+    
+    // Determine safety level based on activity type
+    let safety: 'safe' | 'warning' | 'unsafe' | 'unknown' = 'unknown';
+    if (log.activity_type === 'inappropriate_deleted') {
+      safety = 'unsafe';
+    } else if (log.activity_type === 'deleted') {
+      safety = 'warning';
+    } else if (log.activity_type === 'kept') {
+      safety = 'safe';
+    }
+    
+    const mockContentText = `This is a mock preview of an email that was ${log.activity_type === 'inappropriate_deleted' ? 'flagged as inappropriate' : 'processed'} by KidMail Protector.
+    
+Original sender: ${log.sender_email || 'Unknown'}
+Status: ${log.activity_type}
+Details: ${log.details || 'No details available'}
+
+In a production environment, this would display the actual content of the email.`;
+    
+    // Simple mock HTML for demonstration
+    const mockHtml = `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>${subject}</h2>
+        <p><strong>From:</strong> ${log.sender_email || 'Unknown Sender'}</p>
+        <p><strong>Status:</strong> ${log.activity_type}</p>
+        <div style="margin-top: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 5px;">
+          <p>${log.details || 'No details available'}</p>
+          <p>This is a mock preview of an email that was ${log.activity_type === 'inappropriate_deleted' ? 'flagged as inappropriate' : 'processed'} by KidMail Protector.</p>
+          <p>In a production environment, this would display the actual content of the email.</p>
+        </div>
+      </div>
+    `;
+    
+    const emailContent: EmailContentAnalysis = {
+      id: log.id.toString(),
+      subject,
+      sender: log.sender_email || 'Unknown Sender',
+      date: log.created_at.toISOString(),
+      contentHtml: mockHtml,
+      contentText: mockContentText,
+      safety,
+      matchedRules
+    };
+    
+    res.json(emailContent);
   });
 
   const httpServer = createServer(app);
