@@ -10,12 +10,14 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import EmailPreviewPage from "@/pages/email-preview-page";
+import RiskDashboard from "@/pages/risk-dashboard";
 
 function Router() {
   return (
     <Switch>
       <ProtectedRoute path="/" component={HomePage} />
       <ProtectedRoute path="/email-preview" component={EmailPreviewPage} />
+      <ProtectedRoute path="/risk-dashboard" component={RiskDashboard} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
