@@ -262,65 +262,16 @@ export default function RiskDashboard() {
   });
 
   // Get system safety stats
-  const { data: systemStats, isLoading: isLoadingSystemStats } = useQuery<SystemStats>({
+  const { data: systemStats, isLoading: isLoadingSystemStats, refetch: refetchSystemStats } = useQuery<SystemStats>({
     queryKey: ["/api/safety-stats/system", { timeframe: selectedTimeframe }],
-    queryFn: async () => {
-      try {
-        const res = await apiRequest('GET', `/api/safety-stats/system?timeframe=${selectedTimeframe}`);
-        return await res.json();
-      } catch (error) {
-        // Until the backend is fully implemented, return dummy data
-        return getDummySystemStats();
-      }
-    },
+    queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!user,
-  });
-  
-  // Dummy data for child metrics
-  const getDummyChildMetrics = (childId: number): SafetyMetrics => ({
-    childAccountId: childId,
-    totalEmails: 42,
-    safeEmails: 32,
-    warningEmails: 6,
-    unsafeEmails: 4,
-    unknownEmails: 0,
-    blockedEmails: 4,
-    riskScore: Math.floor(Math.random() * 80) + 10,
-    riskLevel: "medium",
-    recentTrends: Array.from({ length: 7 }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (6 - i));
-      const safeCount = Math.floor(Math.random() * 5) + 1;
-      const warningCount = Math.floor(Math.random() * 2);
-      const unsafeCount = Math.random() > 0.7 ? 1 : 0;
-      return {
-        date: date.toISOString(),
-        safeCount,
-        warningCount,
-        unsafeCount,
-      };
-    }),
-    topThreats: [
-      { type: "Inappropriate Language", count: 2, severity: "medium" },
-      { type: "Suspicious Links", count: 1, severity: "high" },
-      { type: "Adult Content", count: 1, severity: "high" }
-    ]
   });
 
   // Get safety metrics for a specific child
-  const { data: childMetrics, isLoading: isLoadingChildMetrics } = useQuery<SafetyMetrics>({
+  const { data: childMetrics, isLoading: isLoadingChildMetrics, refetch: refetchChildMetrics } = useQuery<SafetyMetrics>({
     queryKey: ["/api/safety-stats/child", { childId: selectedChildId, timeframe: selectedTimeframe }],
-    queryFn: async () => {
-      if (!selectedChildId) throw new Error("No child ID selected");
-      
-      try {
-        const res = await apiRequest('GET', `/api/safety-stats/child/${selectedChildId}?timeframe=${selectedTimeframe}`);
-        return await res.json();
-      } catch (error) {
-        // Until the backend is implemented, we'll return dummy data
-        return getDummyChildMetrics(selectedChildId);
-      }
-    },
+    queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!selectedChildId,
   });
   
@@ -332,11 +283,29 @@ export default function RiskDashboard() {
   }, [childAccounts]);
 
   // Handle refresh data
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     toast({
       title: "Refreshing data",
       description: "The dashboard data is being updated.",
     });
+    
+    try {
+      await Promise.all([
+        refetchSystemStats(),
+        selectedChildId ? refetchChildMetrics() : Promise.resolve()
+      ]);
+      
+      toast({
+        title: "Data refreshed",
+        description: "The dashboard has been updated with the latest data.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error refreshing data",
+        description: "There was a problem updating the dashboard.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

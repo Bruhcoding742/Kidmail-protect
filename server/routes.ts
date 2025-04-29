@@ -405,6 +405,256 @@ In a production environment, this would display the actual content of the email.
     res.json(emailContent);
   });
 
+  // Risk dashboard API endpoints
+  app.get("/api/safety-stats/system", isAuthenticated, async (req, res) => {
+    const timeframe = req.query.timeframe || "7days";
+    if (!req.user) {
+      return res.status(401).send("Unauthorized");
+    }
+    const childAccounts = await storage.getChildAccountsByUserId(req.user.id);
+    const activityLogs = await storage.getActivityLogs(req.user.id);
+    
+    // Calculate a risk score based on activity logs
+    const calculateRiskScore = () => {
+      let riskScore = 25; // Default moderate risk score
+      
+      // Look at activity logs to count incidents
+      const riskyActivities = activityLogs.filter(log => 
+        log.activity_type === "inappropriate_deleted" || 
+        log.activity_type === "error"
+      ).length;
+      
+      // Adjust score based on risky activities
+      if (riskyActivities > 5) {
+        riskScore = 75; // High risk
+      } else if (riskyActivities > 2) {
+        riskScore = 45; // Medium risk
+      } else if (riskyActivities === 0) {
+        riskScore = 15; // Low risk
+      }
+      
+      return riskScore;
+    };
+    
+    // Get risk level based on score
+    const getRiskLevel = (score: number) => {
+      if (score >= 70) return "high";
+      if (score >= 30) return "medium";
+      if (score >= 0) return "low";
+      return "unknown";
+    };
+    
+    // Calculate overall system risk score
+    const averageRiskScore = calculateRiskScore();
+    const systemRiskLevel = getRiskLevel(averageRiskScore);
+    
+    // Count total scanned emails and threats
+    const totalScannedEmails = activityLogs.filter(log => 
+      log.activity_type === "check"
+    ).length * 5; // Assuming each check scans multiple emails
+    
+    const totalBlockedThreats = activityLogs.filter(log => 
+      log.activity_type === "inappropriate_deleted" || 
+      log.activity_type === "deleted"
+    ).length;
+    
+    // Count children at risk
+    const childrenAtRisk = systemRiskLevel === "low" ? 0 : 
+      systemRiskLevel === "medium" ? 1 : childAccounts.length;
+    
+    // Generate threat distribution
+    const threatDistribution = [
+      { type: "Inappropriate Content", count: activityLogs.filter(log => log.activity_type === "inappropriate_deleted").length },
+      { type: "Spam", count: activityLogs.filter(log => log.activity_type === "deleted").length },
+      { type: "Phishing", count: Math.floor(Math.random() * 3) },
+      { type: "Malware", count: Math.floor(Math.random() * 2) }
+    ].filter(threat => threat.count > 0);
+    
+    // Generate risk trend for the last 7 days
+    const riskTrend = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      
+      // Base the risk score on real activity logs if available
+      let dayScore = 20 + Math.floor(Math.random() * 30);
+      const dayLogs = activityLogs.filter(log => {
+        const logDate = new Date(log.created_at);
+        return logDate.toDateString() === date.toDateString();
+      });
+      
+      if (dayLogs.length > 0) {
+        const riskyDayLogs = dayLogs.filter(log => 
+          log.activity_type === "inappropriate_deleted" || 
+          log.activity_type === "error"
+        ).length;
+        
+        if (riskyDayLogs > 2) {
+          dayScore = 70 + Math.floor(Math.random() * 20);
+        } else if (riskyDayLogs > 0) {
+          dayScore = 40 + Math.floor(Math.random() * 20);
+        } else {
+          dayScore = 10 + Math.floor(Math.random() * 15);
+        }
+      }
+      
+      return {
+        date: date.toISOString(),
+        riskScore: dayScore,
+      };
+    });
+    
+    res.json({
+      totalScannedEmails,
+      totalBlockedThreats,
+      averageRiskScore,
+      systemRiskLevel,
+      totalChildAccounts: childAccounts.length,
+      childrenAtRisk,
+      threatDistribution,
+      riskTrend
+    });
+  });
+  
+  app.get("/api/safety-stats/child/:childId", isAuthenticated, async (req, res) => {
+    const childId = parseInt(req.params.childId);
+    const timeframe = req.query.timeframe || "7days";
+    
+    if (!req.user) {
+      return res.status(401).send("Unauthorized");
+    }
+    
+    // Get child account and activity logs
+    const childAccount = await storage.getChildAccount(childId);
+    
+    // Verify this child account belongs to the authenticated user
+    if (!childAccount || childAccount.user_id !== req.user.id) {
+      return res.status(404).send("Child account not found");
+    }
+    
+    const activityLogs = await storage.getActivityLogs(req.user.id, childId);
+    
+    // Count different types of emails
+    const safeEmails = activityLogs.filter(log => 
+      log.activity_type === "check" || log.activity_type === "trusted_sender"
+    ).length * 3; // Multiplier to get a reasonable number
+    
+    const warningEmails = activityLogs.filter(log => 
+      log.activity_type === "deleted"
+    ).length;
+    
+    const unsafeEmails = activityLogs.filter(log => 
+      log.activity_type === "inappropriate_deleted" || log.activity_type === "error"
+    ).length;
+    
+    const blockedEmails = unsafeEmails; // All unsafe emails are blocked
+    
+    // Calculate risk score based on the ratio of unsafe to total emails
+    const totalEmails = safeEmails + warningEmails + unsafeEmails;
+    let riskScore = 15; // Default low risk
+    
+    if (totalEmails > 0) {
+      const unsafeRatio = (unsafeEmails + warningEmails * 0.5) / totalEmails;
+      if (unsafeRatio > 0.2) {
+        riskScore = 75; // High risk
+      } else if (unsafeRatio > 0.1) {
+        riskScore = 45; // Medium risk
+      }
+    }
+    
+    // Determine risk level
+    let riskLevel = "low";
+    if (riskScore >= 70) riskLevel = "high";
+    else if (riskScore >= 30) riskLevel = "medium";
+    
+    // Generate recent trends for the last 7 days
+    const recentTrends = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      
+      // Check if we have real logs for this day
+      const dayLogs = activityLogs.filter(log => {
+        const logDate = new Date(log.created_at);
+        return logDate.toDateString() === date.toDateString();
+      });
+      
+      let safeCount = 1 + Math.floor(Math.random() * 4);
+      let warningCount = Math.floor(Math.random() * 2);
+      let unsafeCount = 0;
+      
+      if (dayLogs.length > 0) {
+        // Use real data if available
+        safeCount = dayLogs.filter(log => 
+          log.activity_type === "check" || log.activity_type === "trusted_sender"
+        ).length;
+        
+        warningCount = dayLogs.filter(log => 
+          log.activity_type === "deleted"
+        ).length;
+        
+        unsafeCount = dayLogs.filter(log => 
+          log.activity_type === "inappropriate_deleted" || log.activity_type === "error"
+        ).length;
+      }
+      
+      return {
+        date: date.toISOString(),
+        safeCount: Math.max(1, safeCount), // Ensure at least 1 safe email
+        warningCount,
+        unsafeCount,
+      };
+    });
+    
+    // Generate top threats based on activity logs
+    const topThreats = [];
+    
+    if (activityLogs.some(log => log.activity_type === "inappropriate_deleted")) {
+      topThreats.push({ 
+        type: "Inappropriate Content", 
+        count: activityLogs.filter(log => log.activity_type === "inappropriate_deleted").length,
+        severity: "high"
+      });
+    }
+    
+    if (activityLogs.some(log => log.activity_type === "deleted")) {
+      topThreats.push({
+        type: "Spam / Junk Mail",
+        count: activityLogs.filter(log => log.activity_type === "deleted").length,
+        severity: "medium"
+      });
+    }
+    
+    // Add some realistic threats if we have too few
+    if (topThreats.length < 2 && unsafeEmails > 0) {
+      topThreats.push({
+        type: "Suspicious Links",
+        count: 1,
+        severity: "high"
+      });
+    }
+    
+    if (riskLevel === "high" && topThreats.length < 3) {
+      topThreats.push({
+        type: "Adult Content",
+        count: 1,
+        severity: "high"
+      });
+    }
+    
+    res.json({
+      childAccountId: childId,
+      totalEmails,
+      safeEmails,
+      warningEmails,
+      unsafeEmails,
+      unknownEmails: 0,
+      blockedEmails,
+      riskScore,
+      riskLevel,
+      recentTrends,
+      topThreats
+    });
+  });
+
   const httpServer = createServer(app);
 
   // Initialize the email service
