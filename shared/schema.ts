@@ -225,12 +225,44 @@ export const systemStatus = pgTable("system_status", {
   status: text("status").notNull(), // 'operational', 'degraded', 'down', etc.
   last_updated: timestamp("last_updated").defaultNow().notNull(),
   details: text("details"),
+  adaptive_learning_enabled: boolean("adaptive_learning_enabled").default(false),
+  learning_rate: text("learning_rate").default("0.1"),
+  learning_mode: text("learning_mode").default("passive"), // 'passive', 'active', 'aggressive'
 });
 
 export const insertSystemStatusSchema = createInsertSchema(systemStatus).pick({
   status: true,
   details: true,
+  adaptive_learning_enabled: true,
+  learning_rate: true,
+  learning_mode: true,
 });
 
 export type InsertSystemStatus = z.infer<typeof insertSystemStatusSchema>;
 export type SystemStatus = typeof systemStatus.$inferSelect;
+
+// Machine learning feedback for adaptive learning
+export const mlFeedback = pgTable("ml_feedback", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id").notNull().references(() => users.id),
+  child_account_id: integer("child_account_id").references(() => childAccounts.id),
+  email_subject: text("email_subject"),
+  original_classification: text("original_classification").notNull(), // 'safe', 'warning', 'unsafe'
+  corrected_classification: text("corrected_classification").notNull(), // 'safe', 'warning', 'unsafe'
+  feedback_notes: text("feedback_notes"),
+  feature_data: jsonb("feature_data"), // Store features that triggered classification
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMlFeedbackSchema = createInsertSchema(mlFeedback).pick({
+  user_id: true,
+  child_account_id: true,
+  email_subject: true,
+  original_classification: true,
+  corrected_classification: true,
+  feedback_notes: true,
+  feature_data: true,
+});
+
+export type InsertMlFeedback = z.infer<typeof insertMlFeedbackSchema>;
+export type MlFeedback = typeof mlFeedback.$inferSelect;

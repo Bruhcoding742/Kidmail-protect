@@ -655,6 +655,91 @@ In a production environment, this would display the actual content of the email.
     });
   });
 
+  // Adaptive learning endpoints
+  app.get("/api/adaptive-learning/status", isAuthenticated, async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Unauthorized");
+    }
+    
+    try {
+      const systemStatusData = await storage.getSystemStatus();
+      res.json({
+        enabled: systemStatusData.adaptive_learning_enabled || false,
+        learningRate: systemStatusData.learning_rate || "0.1",
+        learningMode: systemStatusData.learning_mode || "passive",
+      });
+    } catch (error) {
+      console.error("Error getting adaptive learning status:", error);
+      res.status(500).json({ message: "Failed to get adaptive learning status" });
+    }
+  });
+  
+  app.post("/api/adaptive-learning/toggle", isAuthenticated, async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Unauthorized");
+    }
+    
+    const { enabled, learningRate, learningMode } = req.body;
+    
+    try {
+      const systemStatusData = await storage.getSystemStatus();
+      const updatedStatus = await storage.updateSystemStatus({
+        ...systemStatusData,
+        adaptive_learning_enabled: enabled,
+        learning_rate: learningRate || systemStatusData.learning_rate,
+        learning_mode: learningMode || systemStatusData.learning_mode,
+      });
+      
+      res.json({
+        enabled: updatedStatus.adaptive_learning_enabled,
+        learningRate: updatedStatus.learning_rate,
+        learningMode: updatedStatus.learning_mode,
+      });
+    } catch (error) {
+      console.error("Error updating adaptive learning settings:", error);
+      res.status(500).json({ message: "Failed to update adaptive learning settings" });
+    }
+  });
+  
+  app.post("/api/adaptive-learning/feedback", isAuthenticated, async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Unauthorized");
+    }
+    
+    const { childAccountId, emailSubject, originalClassification, correctedClassification, feedbackNotes, featureData } = req.body;
+    
+    try {
+      const feedback = await storage.createMlFeedback({
+        user_id: req.user.id,
+        child_account_id: childAccountId,
+        email_subject: emailSubject,
+        original_classification: originalClassification,
+        corrected_classification: correctedClassification,
+        feedback_notes: feedbackNotes,
+        feature_data: featureData,
+      });
+      
+      res.status(201).json(feedback);
+    } catch (error) {
+      console.error("Error submitting ML feedback:", error);
+      res.status(500).json({ message: "Failed to submit feedback" });
+    }
+  });
+  
+  app.get("/api/adaptive-learning/feedback", isAuthenticated, async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Unauthorized");
+    }
+    
+    try {
+      const feedbackEntries = await storage.getMlFeedback(req.user.id);
+      res.json(feedbackEntries);
+    } catch (error) {
+      console.error("Error getting ML feedback:", error);
+      res.status(500).json({ message: "Failed to get feedback entries" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // Initialize the email service

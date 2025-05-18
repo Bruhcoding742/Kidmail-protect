@@ -7,7 +7,8 @@ import {
   trustedSenders, type TrustedSender, type InsertTrustedSender,
   junkMailPreferences, type JunkMailPreferences, type InsertJunkMailPreferences,
   emailProviders, type EmailProvider, type InsertEmailProvider,
-  emailProviderEnum
+  emailProviderEnum,
+  mlFeedback, type MlFeedback, type InsertMlFeedback
 } from "@shared/schema";
 
 export interface IStorage {
@@ -50,7 +51,7 @@ export interface IStorage {
   
   // System status methods
   getSystemStatus(): Promise<SystemStatus>;
-  updateSystemStatus(data: InsertSystemStatus): Promise<SystemStatus>;
+  updateSystemStatus(data: Partial<InsertSystemStatus>): Promise<SystemStatus>;
   
   // Email provider methods
   getEmailProvider(id: number): Promise<EmailProvider | undefined>;
@@ -59,6 +60,11 @@ export interface IStorage {
   createEmailProvider(provider: InsertEmailProvider): Promise<EmailProvider>;
   updateEmailProvider(id: number, data: Partial<InsertEmailProvider>): Promise<EmailProvider>;
   deleteEmailProvider(id: number): Promise<void>;
+  
+  // Machine learning feedback methods
+  createMlFeedback(feedback: InsertMlFeedback): Promise<MlFeedback>;
+  getMlFeedback(userId: number, childAccountId?: number): Promise<MlFeedback[]>;
+  getMlFeedbackById(id: number): Promise<MlFeedback | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -70,6 +76,7 @@ export class MemStorage implements IStorage {
   private junkMailPreferences: Map<number, JunkMailPreferences>;
   private systemStatusData: SystemStatus | undefined;
   private emailProviderData: Map<number, EmailProvider>;
+  private mlFeedbackData: Map<number, MlFeedback>;
   
   private userIdCounter: number;
   private childAccountIdCounter: number;
