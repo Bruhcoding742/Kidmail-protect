@@ -85,6 +85,7 @@ export class MemStorage implements IStorage {
   private trustedSenderIdCounter: number;
   private junkMailPreferencesIdCounter: number;
   private emailProviderIdCounter: number;
+  private mlFeedbackIdCounter: number;
   
   constructor() {
     this.users = new Map();
